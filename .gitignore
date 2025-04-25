@@ -1,15 +1,33 @@
-*.iml
-.gradle
+# Kotlin/Java class files
+*.class
+
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Java/Android build folders
+/build/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# Gradle
+.gradle/
+*.gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# Signing files
+*.jks
+*.keystore
+*.key
+*.pem
+
+# IntelliJ/IDEA
+.idea/
+*.iml
+.idea/**
+
+# OS files
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+
