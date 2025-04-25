@@ -1,10 +1,14 @@
 package com.example.timewell
+
 import android.app.AppOpsManager
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -35,6 +39,14 @@ class MainActivity : ComponentActivity() {
 fun UsagePermissionScreen() {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(checkUsagePermission(context)) }
+    var usageStats by remember { mutableStateOf<List<UsageStats>>(emptyList()) }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            usageStats = getAppUsageStats(context)
+            logUsageStats(context)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -44,7 +56,12 @@ fun UsagePermissionScreen() {
     ) {
         if (hasPermission) {
             Text("Permission granted ✅")
-            // You can show usage data here later
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Top used apps today:")
+            Spacer(modifier = Modifier.height(8.dp))
+            usageStats.take(10).forEach { stat ->
+                Text("${stat.packageName} — ${stat.totalTimeInForeground / 1000}s")
+            }
         } else {
             Text("Usage access permission is required.")
             Spacer(modifier = Modifier.height(16.dp))
@@ -74,3 +91,40 @@ fun checkUsagePermission(context: Context): Boolean {
     }
     return mode == AppOpsManager.MODE_ALLOWED
 }
+
+fun getAppUsageStats(context: Context): List<UsageStats> {
+    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val endTime = System.currentTimeMillis()
+    val startTime = endTime - 1000 * 60 * 60 * 24 // last 24 hours
+
+    return usageStatsManager.queryUsageStats(
+        UsageStatsManager.INTERVAL_DAILY,
+        startTime,
+        endTime
+    ).filter {
+        it.totalTimeInForeground > 0
+    }.sortedByDescending { it.totalTimeInForeground }
+}
+
+fun logUsageStats(context: Context) {
+    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val endTime = System.currentTimeMillis()
+    val startTime = endTime - 1000 * 60 * 60 * 24
+
+    val stats = usageStatsManager.queryUsageStats(
+        UsageStatsManager.INTERVAL_DAILY,
+        startTime,
+        endTime
+    )
+
+    if (stats.isNullOrEmpty()) {
+        Log.d("TimeWell", "No usage stats found.")
+    } else {
+        stats.filter { it.totalTimeInForeground > 0 }
+            .sortedByDescending { it.totalTimeInForeground }
+            .forEach {
+                Log.d("TimeWell", "App: ${it.packageName}, time: ${it.totalTimeInForeground / 1000}s")
+            }
+    }
+}
+
