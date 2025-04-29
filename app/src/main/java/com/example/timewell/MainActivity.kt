@@ -5,6 +5,8 @@ import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -12,7 +14,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -60,8 +65,11 @@ fun UsagePermissionScreen() {
             Text("Top used apps today:")
             Spacer(modifier = Modifier.height(8.dp))
             usageStats.take(10).forEach { stat ->
-                Text("${stat.packageName} — ${stat.totalTimeInForeground / 1000}s")
+                val appName = getAppNameFromPackage(context, stat.packageName)
+                val timeFormatted = formatTime((stat.totalTimeInForeground / 1000).toInt())
+                Text("$appName — $timeFormatted")
             }
+
         } else {
             Text("Usage access permission is required.")
             Spacer(modifier = Modifier.height(16.dp))
@@ -93,7 +101,9 @@ fun checkUsagePermission(context: Context): Boolean {
 }
 
 fun getAppUsageStats(context: Context): List<UsageStats> {
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val packageManager = context.packageManager
     val endTime = System.currentTimeMillis()
     val startTime = endTime - 1000 * 60 * 60 * 24 // last 24 hours
 
@@ -101,13 +111,22 @@ fun getAppUsageStats(context: Context): List<UsageStats> {
         UsageStatsManager.INTERVAL_DAILY,
         startTime,
         endTime
-    ).filter {
-        it.totalTimeInForeground > 0
+    ).filter { stat ->
+        // Filter criteria:
+        stat.totalTimeInForeground > 0 &&
+                try {
+                    val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
+                    (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                } catch (e: PackageManager.NameNotFoundException) {
+                    false // exclude unknown packages
+                }
     }.sortedByDescending { it.totalTimeInForeground }
 }
 
+
 fun logUsageStats(context: Context) {
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     val endTime = System.currentTimeMillis()
     val startTime = endTime - 1000 * 60 * 60 * 24
 
@@ -123,7 +142,10 @@ fun logUsageStats(context: Context) {
         stats.filter { it.totalTimeInForeground > 0 }
             .sortedByDescending { it.totalTimeInForeground }
             .forEach {
-                Log.d("TimeWell", "App: ${it.packageName}, time: ${it.totalTimeInForeground / 1000}s")
+                Log.d(
+                    "TimeWell",
+                    "App: ${it.packageName}, time: ${it.totalTimeInForeground / 1000}s"
+                )
             }
     }
 }
