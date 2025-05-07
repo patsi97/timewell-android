@@ -103,11 +103,9 @@ fun UsagePermissionScreen() {
                     val timeFormatted = formatTime((stat.totalTimeInForeground / 1000).toInt())
 
                     Column {
-                        Text(text = appName, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "(${stat.packageName}) — $timeFormatted",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "$appName — $timeFormatted",
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     }
                 }
@@ -155,7 +153,9 @@ fun getAppUsageStats(context: Context, showAllApps: Boolean): List<UsageStats> {
     )
 
     if (showAllApps) {
-        return allStats.sortedByDescending { it.totalTimeInForeground }
+        return allStats
+            .filter { it.totalTimeInForeground > 0 }
+            .sortedByDescending { it.totalTimeInForeground }
     }
 
     val installedPackages = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
@@ -165,10 +165,13 @@ fun getAppUsageStats(context: Context, showAllApps: Boolean): List<UsageStats> {
         .map { it.packageName }
         .toSet()
 
-    return allStats.filter { stat ->
-        stat.packageName in installedPackages
-    }.sortedByDescending { it.totalTimeInForeground }
+    return allStats
+        .filter { stat ->
+            stat.totalTimeInForeground > 0 && stat.packageName in installedPackages
+        }
+        .sortedByDescending { it.totalTimeInForeground }
 }
+
 
 fun logUsageStats(context: Context) {
     val usageStatsManager =

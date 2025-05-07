@@ -22,8 +22,6 @@ fun getAppNameFromPackage(context: Context, packageName: String): String {
     }
 }
 
-
-
 fun fallbackLabel(packageName: String): String {
     return packageName.split('.').lastOrNull()
         ?.replaceFirstChar { it.uppercaseChar() }
