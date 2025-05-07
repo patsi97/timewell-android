@@ -5,7 +5,6 @@ import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -14,11 +13,15 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -45,10 +48,11 @@ fun UsagePermissionScreen() {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(checkUsagePermission(context)) }
     var usageStats by remember { mutableStateOf<List<UsageStats>>(emptyList()) }
+    var showAllApps by remember { mutableStateOf(false) }
 
-    LaunchedEffect(hasPermission) {
+    LaunchedEffect(hasPermission, showAllApps) {
         if (hasPermission) {
-            usageStats = getAppUsageStats(context)
+            usageStats = getAppUsageStats(context, showAllApps)
             logUsageStats(context)
         }
     }
@@ -57,19 +61,57 @@ fun UsagePermissionScreen() {
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
         if (hasPermission) {
-            Text("Permission granted ✅")
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Top used apps today:")
-            Spacer(modifier = Modifier.height(8.dp))
-            usageStats.take(10).forEach { stat ->
-                val appName = getAppNameFromPackage(context, stat.packageName)
-                val timeFormatted = formatTime((stat.totalTimeInForeground / 1000).toInt())
-                Text("$appName — $timeFormatted")
+            Text("Permission granted ✅", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Top used apps today:", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(onClick = {
+                    usageStats = getAppUsageStats(context, showAllApps)
+                }) {
+                    Text("Refresh")
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Show all apps", modifier = Modifier.padding(end = 8.dp))
+                    Switch(
+                        checked = showAllApps,
+                        onCheckedChange = {
+                            showAllApps = it
+                            usageStats = getAppUsageStats(context, showAllApps)
+                        }
+                    )
+                }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(items = usageStats, key = { it.packageName }) { stat ->
+                    val appName = getAppNameFromPackage(context, stat.packageName)
+                    val timeFormatted = formatTime((stat.totalTimeInForeground / 1000).toInt())
+
+                    Column {
+                        Text(text = appName, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "(${stat.packageName}) — $timeFormatted",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         } else {
             Text("Usage access permission is required.")
             Spacer(modifier = Modifier.height(16.dp))
@@ -100,29 +142,33 @@ fun checkUsagePermission(context: Context): Boolean {
     return mode == AppOpsManager.MODE_ALLOWED
 }
 
-fun getAppUsageStats(context: Context): List<UsageStats> {
-    val usageStatsManager =
-        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+fun getAppUsageStats(context: Context, showAllApps: Boolean): List<UsageStats> {
+    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     val packageManager = context.packageManager
     val endTime = System.currentTimeMillis()
     val startTime = endTime - 1000 * 60 * 60 * 24 // last 24 hours
 
-    return usageStatsManager.queryUsageStats(
+    val allStats = usageStatsManager.queryUsageStats(
         UsageStatsManager.INTERVAL_DAILY,
         startTime,
         endTime
-    ).filter { stat ->
-        // Filter criteria:
-        stat.totalTimeInForeground > 0 &&
-                try {
-                    val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
-                    (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
-                } catch (e: PackageManager.NameNotFoundException) {
-                    false // exclude unknown packages
-                }
+    )
+
+    if (showAllApps) {
+        return allStats.sortedByDescending { it.totalTimeInForeground }
+    }
+
+    val installedPackages = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+        .filter { appInfo ->
+            packageManager.getLaunchIntentForPackage(appInfo.packageName) != null
+        }
+        .map { it.packageName }
+        .toSet()
+
+    return allStats.filter { stat ->
+        stat.packageName in installedPackages
     }.sortedByDescending { it.totalTimeInForeground }
 }
-
 
 fun logUsageStats(context: Context) {
     val usageStatsManager =
@@ -148,5 +194,6 @@ fun logUsageStats(context: Context) {
                 )
             }
     }
+
 }
 
