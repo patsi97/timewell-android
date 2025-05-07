@@ -1,48 +1,34 @@
 package com.example.timewell
 
 import android.content.Context
-import android.content.res.Resources
 
 fun getAppNameFromPackage(context: Context, packageName: String): String {
-    val packageManager = context.packageManager
+    val knownAppNames = mapOf(
+        "com.facebook.katana" to "Facebook",
+        "com.instagram.android" to "Instagram",
+        "com.whatsapp" to "WhatsApp",
+        "com.snapchat.android" to "Snapchat"
+    )
+
+    knownAppNames[packageName]?.let { return it }
+
     return try {
+        val packageManager = context.packageManager
         val appInfo = packageManager.getApplicationInfo(packageName, 0)
-
-        // Try label resource first
-        val label = try {
-            if (appInfo.labelRes != 0) {
-                context.getString(appInfo.labelRes)
-            } else {
-                packageManager.getApplicationLabel(appInfo).toString().trim()
-            }
-        } catch (e: Resources.NotFoundException) {
-            // Fallback if labelRes points to a missing resource
-            packageManager.getApplicationLabel(appInfo).toString().trim()
-        }
-
-
-        if (
-            label.equals("android", ignoreCase = true) ||
-            label.equals("katana", ignoreCase = true) ||
-            label.equals("insta", ignoreCase = true) ||
-            label.length <= 3
-        ) {
-            fallbackLabel(packageName)
-        } else {
-            label
-        }
+        val label = packageManager.getApplicationLabel(appInfo).toString()
+        if (label.equals("android", true) || label.length <= 2) fallbackLabel(packageName) else label
     } catch (e: Exception) {
         fallbackLabel(packageName)
     }
 }
 
 
-// Helper for fallback label
+
 fun fallbackLabel(packageName: String): String {
-    return packageName.split('.').lastOrNull()?.replaceFirstChar { it.uppercaseChar() } ?: packageName
+    return packageName.split('.').lastOrNull()
+        ?.replaceFirstChar { it.uppercaseChar() }
+        ?: packageName
 }
-
-
 
 fun formatTime(seconds: Int): String {
     val hours = seconds / 3600
